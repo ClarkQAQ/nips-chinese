@@ -1,52 +1,52 @@
-> __Warning__  `unrecommended`: only implemented once and unclear whether it works, requires review
+> __警告__ `不推荐`：仅实现过一次且不清楚是否正常工作，需要审查
 
 NIP-BE
 ======
 
-Nostr BLE Communications Protocol
+Nostr BLE 通信协议
 ---------------------------------
 
 `draft` `unrecommended` `optional`
 
-This NIP specifies how Nostr apps can use BLE to communicate and synchronize with each other. The BLE protocol follows a client-server pattern, so this NIP emulates the WS structure in a similar way, but with some adaptations to its limitations.
+本 NIP 规定了 Nostr 应用如何使用 BLE（蓝牙低功耗）进行相互通信和同步。BLE 协议遵循客户端-服务器模式，因此本 NIP 以类似方式模拟了 WebSocket 结构，但根据其限制进行了一些调整。
 
-## Device advertisement
-A device advertises itself with:
-- Service UUID: `0000180f-0000-1000-8000-00805f9b34fb`
-- Data: Device UUID in ByteArray format
+## 设备广播
+设备通过以下方式广播自身：
+- 服务 UUID：`0000180f-0000-1000-8000-00805f9b34fb`
+- 数据：ByteArray 格式的设备 UUID
 
-## GATT service
-The device exposes a Nordic UART Service with the following characteristics:
+## GATT 服务
+设备暴露一个 Nordic UART 服务，具有以下特征：
 
-1. Write Characteristic
-   - UUID: `87654321-0000-1000-8000-00805f9b34fb`
-   - Properties: Write
+1. 写入特征
+   - UUID：`87654321-0000-1000-8000-00805f9b34fb`
+   - 属性：写入
 
-2. Read Characteristic
-   - UUID: `12345678-0000-1000-8000-00805f9b34fb`
-   - Properties: Notify, Read
+2. 读取特征
+   - UUID：`12345678-0000-1000-8000-00805f9b34fb`
+   - 属性：通知、读取
 
-## Role assignment
+## 角色分配
 
-When one device initially finds another advertising the service, it will read the service's data to get the device UUID and compare it with its own advertised device UUID. For this communication, the device with the highest ID will take the role of GATT Server (Relay), the other will be considered the GATT Client (Client) and will proceed to establish the connection.
+当一个设备最初发现另一个设备在广播该服务时，它将读取服务的数据以获取设备 UUID，并与自身广播的设备 UUID 进行比较。在此通信中，ID 较高的设备将担任 GATT 服务器（中继）的角色，另一设备将被视为 GATT 客户端（客户端）并将继续建立连接。
 
-For devices whose purpose will require a single role, its device UUID will always be:
+对于其用途需要单一角色的设备，其设备 UUID 将始终为：
 
-- GATT Server: `FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF`
-- GATT Client: `00000000-0000-0000-0000-000000000000`
+- GATT 服务器：`FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF`
+- GATT 客户端：`00000000-0000-0000-0000-000000000000`
 
-## Messages
+## 消息
 
-All messages will follow [NIP-01](/01.md) message structure. For a given message, a compression stream (DEFLATE) is applied to the message to generate a byte array. Depending on the BLE version, the byte array can be too large for a single message (20-23 bytes in BLE 4.2, 256 bytes in BLE > 4.2). In that case, this byte array is split into any number of batches following the structure:
+所有消息将遵循 [NIP-01](/01.md) 消息结构。对于给定的消息，会对消息应用压缩流（DEFLATE）以生成字节数组。根据 BLE 版本，字节数组可能对于单条消息来说过大（BLE 4.2 中为 20-23 字节，BLE > 4.2 中为 256 字节）。在这种情况下，该字节数组将按照以下结构拆分为任意数量的批次：
 
 ```
 [batch index (first 2 bytes)][batch n][is last batch (last byte)]
 ```
-After reception of all batches, the other device can then join them and decompress. To ensure reliability, only 1 message will be read/written at a time. MTU can be negotiated in advance. The maximum size for a message is 64KB; bigger messages will be rejected.
+在接收到所有批次后，另一设备可以将其合并并解压。为确保可靠性，每次只读取/写入 1 条消息。MTU 可以事先协商。消息的最大大小为 64KB；更大的消息将被拒绝。
 
-## Examples
+## 示例
 
-This example implements a function to split and compress a byte array into chunks, as well as another function to join and decompress them in order to obtain the initial result:
+此示例实现了将字节数组分割压缩为数据块的函数，以及将数据块合并解压以获得原始结果的函数：
 
 ```kotlin
 fun splitInChunks(message: ByteArray): Array<ByteArray> {
@@ -90,50 +90,50 @@ fun joinChunks(chunks: Array<ByteArray>): ByteArray {
 
 ```
 
-## Workflows
+## 工作流程
 
-### Client to relay
+### 客户端到中继
 
-- Any message the client wants to send to a relay will be a write message.
-- Any message the client receives from a relay will be a read message.
+- 客户端想要发送给中继的任何消息都将是一条写入消息。
+- 客户端从中继接收的任何消息都将是一条读取消息。
 
-### Relay to client
+### 中继到客户端
 
-The relay should notify the client about any new event matching subscription's filters by using the Notify action of the Read Characteristic. After that, the client can proceed to read messages from the relay.
+中继应通过使用读取特征的通知操作来通知客户端任何与订阅过滤器匹配的新事件。之后，客户端可以继续从中继读取消息。
 
-### Device synchronization
+### 设备同步
 
-Given the nature of BLE, it is expected that the direct connection between two devices might be extremely intermittent, with gaps of hours or even days. That's why it's crucial to define a synchronization process by following [NIP-77](./77.md) but with an adaptation to the limitations of the technology.
+考虑到 BLE 的特性，两个设备之间的直接连接可能非常不稳定，存在数小时甚至数天的间隙。这就是为什么遵循 [NIP-77](./77.md) 定义一个同步过程至关重要，但需要根据技术的限制进行调整。
 
-After two devices have successfully connected and established the Client-Server roles, the devices will use half-duplex communication to intermittently send and receive messages.
+在两个设备成功连接并建立客户端-服务器角色后，设备将使用半双工通信来间歇性地发送和接收消息。
 
-#### Half-duplex synchronization
+#### 半双工同步
 
-Right after the 2 devices connect, the Client starts the workflow by sending the first message.
+在两个设备连接后，客户端立即开始工作流程，发送第一条消息。
 
-1. Client - Writes ["NEG-OPEN"](/77.md#initial-message-client-to-relay) message.
-2. Server - Sends `write-success`.
-3. Client - Sends `read-message`.
-4. Server - Responds with ["NEG-MSG"](./77.md#subsequent-messages-bidirectional) message.
-5. Client -
-   1. If the Client has messages missing on the Server, it writes one `EVENT`.
-   2. If the Client doesn't have any messages missing on the Server, it writes `EOSE`. In this case, subsequent messages to the Server will be empty while the Server claims to have more notes for the Client.
-6. Server - Sends `write-success`.
-7. Client - Sends `read-message`.
-8. Server -
-   1. If the Server has messages missing on the Client, it responds with one `EVENT`.
-   2. If the Client doesn't have any messages missing on the Server, it responds with `EOSE`. In this case, subsequent responses to the Client will be empty.
-9. If the Client detects that the devices are not synchronized yet, jump to step 5.
-10. After the two devices detect that there are no more missing events on both ends, the workflow will pause at this point.
+1. 客户端 - 写入 ["NEG-OPEN"](/77.md#initial-message-client-to-relay) 消息。
+2. 服务器 - 发送 `write-success`。
+3. 客户端 - 发送 `read-message`。
+4. 服务器 - 响应 ["NEG-MSG"](./77.md#subsequent-messages-bidirectional) 消息。
+5. 客户端 -
+   1. 如果客户端有服务器上缺失的消息，则写入一条 `EVENT`。
+   2. 如果客户端没有服务器上缺失的消息，则写入 `EOSE`。在这种情况下，后续发送给服务器的消息将为空，而服务器声称还有更多笔记要给客户端。
+6. 服务器 - 发送 `write-success`。
+7. 客户端 - 发送 `read-message`。
+8. 服务器 -
+   1. 如果服务器有客户端上缺失的消息，则响应一条 `EVENT`。
+   2. 如果客户端没有服务器上缺失的消息，则响应 `EOSE`。在这种情况下，后续对客户端的响应将为空。
+9. 如果客户端检测到设备尚未同步，则跳转到步骤 5。
+10. 在两个设备检测到两端都没有更多缺失事件后，工作流程将在此时暂停。
 
-#### Half-duplex event spread
+#### 半双工事件传播
 
-While two devices are connected and synchronized, it might happen that one of them receives a new message from another connected peer. Devices MUST keep track of which notes have been sent to its peers while they are connected. If the newly received event is detected as missing in one of the connected and synchronized peers:
+当两个设备已连接并同步时，其中一个设备可能从另一个连接的对等方收到新消息。设备 `MUST` 记录哪些笔记已发送给其连接的对等方。如果发现新收到的事件在某个已连接且同步的对等方中缺失：
 
-1. If the peer is a Server:
-   1. Client - It writes the `EVENT`.
-   2. Server - Sends `write-success`.
-2. If the peer is a Client:
-   1. Server - It will send an empty notification to the Client.
-   2. Client - Sends `read-message`.
-   3. Server - Responds with the `EVENT`.
+1. 如果对等方是服务器：
+   1. 客户端 - 写入 `EVENT`。
+   2. 服务器 - 发送 `write-success`。
+2. 如果对等方是客户端：
+   1. 服务器 - 向客户端发送空通知。
+   2. 客户端 - 发送 `read-message`。
+   3. 服务器 - 响应 `EVENT`。

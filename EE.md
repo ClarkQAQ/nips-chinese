@@ -1,164 +1,164 @@
-> __Warning__  `unrecommended`: superseded by the [Marmot Protocol](https://github.com/marmot-protocol/marmot)
+> __警告__ `不推荐`：已被 [Marmot 协议](https://github.com/marmot-protocol/marmot) 取代
 
 NIP-EE
 ======
 
-E2EE Messaging using the Messaging Layer Security (MLS) Protocol
+使用 MLS（消息层安全）协议的端到端加密消息传递
 ----------------------------------------------------------------
 
 `final` `unrecommended` `optional`
 
-This NIP standardizes how to use the [MLS Protocol](https://www.rfc-editor.org/rfc/rfc9420.html) with Nostr for efficient and E2EE (end-to-end encrypted) direct and group messaging.
+本 NIP 标准化了如何将 [MLS 协议](https://www.rfc-editor.org/rfc/rfc9420.html) 与 Nostr 结合使用，以实现高效且 E2EE（端到端加密）的直接和群组消息传递。
 
-## Context
+## 背景
 
-Originally, one-to-one direct messages (DMs) in Nostr happened via the scheme defined in [NIP-04](04.md). This NIP is not recommended because, while it encrypts the content of the message (provides decent confidentiality), it leaks significant amounts of metadata about the parties involved in the conversation (completely lacks privacy).
+最初，Nostr 中的一对一直接消息（DM）通过 [NIP-04](04.md) 中定义的方案进行。此 NIP 不推荐使用，因为虽然它加密了消息内容（提供了不错的机密性），但它泄露了对话参与方的大量元数据（完全缺乏隐私）。
 
-With the addition of [NIP-44](44.md), we have an updated encryption scheme that improves confidentiality guarantees but stops short of defining a new scheme for doing direct messages using this encryption scheme. Hence, makes little to no difference to privacy.
+随着 [NIP-44](44.md) 的加入，我们有了更新的加密方案，改善了机密性保证，但未定义使用此加密方案进行直接消息传递的新方案。因此，对隐私几乎没有影响。
 
-Most recently, [NIP-17](17.md) combines [NIP-44](44.md) encryption with [NIP-59](59.md) gift-wrapping to hide the encrypted direct message inside another set of events to ensure that it's impossible to see who is talking to who and when messages passed between the users. This largely solves the metadata leakage problem; while it's still possible to see that a user is receiving gift-wrapped events, you can't tell from whom and what kind of events are within the gift-wrap outer event. This gives some degree of deniability/repudiation but doesn't solve forward secrecy or post compromise security. That is to say, if a user's private key (or the calculated conversation key shared between two users used to encrypt messages) is compromised, the attacker will have full access to all past and future DMs sent between those users.
+最近，[NIP-17](17.md) 将 [NIP-44](44.md) 加密与 [NIP-59](59.md) 礼物包装相结合，将加密的直接消息隐藏在另一组事件中，以确保无法看到谁在和谁交谈以及消息何时在用户之间传递。这基本上解决了元数据泄漏问题；虽然仍然可以看到用户正在接收礼物包装事件，但无法判断来自谁以及礼物包装外部事件内部包含何种事件。这提供了一定程度的可否认性/拒绝能力，但并未解决前向保密或泄露后安全问题。也就是说，如果用户的私钥（或用于加密消息的两个用户之间共享的计算出的会话密钥）被泄露，攻击者将可以完全访问在这些用户之间发送的所有过去和未来的 DM。
 
-In addition, neither [NIP-04](04.md) or [NIP-17](17.md) attempt to solve the problem of group messages.
+此外，[NIP-04](04.md) 和 [NIP-17](17.md) 都没有尝试解决群组消息的问题。
 
-### Why is this important?
+### 为什么这很重要？
 
-Without proper E2EE, Nostr cannot be used as the protocol for secure messaging clients. While clients like Signal do a fantastic job with E2EE, they still rely on centralized servers and as a result can be shut down by a powerful (i.e. state-level) actor. The goal of Nostr is not only to protect against centralized entities censoring you and your communications, but also protect against the ability of a state-level actor to stop these sorts of services from existing in the first place. By replacing centralized servers with decentralized relays, we make it nearly impossible for a centralized actor to completely stop communications between individual users.
+没有适当的端到端加密，Nostr 不能用作安全消息传递客户端的协议。虽然像 Signal 这样的客户端在端到端加密方面做得非常出色，但它们仍然依赖中心化服务器，因此可能被强大的（即国家级的）行为者关闭。Nostr 的目标不仅仅是保护你免受中心化实体的审查和通信干扰，还要防止国家级行为者首先阻止这类服务存在的能力。通过用去中心化的中继替代中心化服务器，我们使得中心化行为者几乎不可能完全阻止个体用户之间的通信。
 
-### Goals of this NIP
+### 本 NIP 的目标
 
-1. Private _and_ Confidential DMs and Group messages
-   1. **Private** means that an observer cannot tell that Alice and Bob are talking to one another, or that Alice is part of a specific group. This necessarily requires protecting metadata.
-   2. **Confidential** means that the contents of conversations can only be viewed by the intended recipients.
-2. Forward secrecy and Post-compromise security
-   1. **Forward secrecy** means that encrypted content in the past remains encrypted even if a key material is leaked.
-   2. **Post compromise security** means that leaking key material doesn't allow an attacker to continue to read messages indefinitely into the future.
-3. Scales efficiently for large groups
-4. Allows for the use of multiple device/clients in a single conversation/group.
+1. 私密 _且_ 保密的 DM 和群组消息
+   1. **私密**意味着观察者无法判断 Alice 和 Bob 在交谈，或 Alice 是某个特定群组的成员。这必然需要保护元数据。
+   2. **保密**意味着对话内容只能被预期的接收者查看。
+2. 前向保密和泄露后安全
+   1. **前向保密**意味着即使密钥材料被泄露，过去加密的内容仍然保持加密状态。
+   2. **泄露后安全**意味着泄露密钥材料不会允许攻击者无限期地继续读取未来的消息。
+3. 高效扩展以支持大型群组
+4. 允许在单个对话/群组中使用多个设备/客户端。
 
-### Why MLS?
+### 为什么选择 MLS？
 
-This scheme adapts the Message Layer Security (MLS) protocol for use with Nostr. You can think of MLS as an evolution of the Signal Protocol. However, it significantly improves the scalability of encryption operations for large group messaging significantly (linear -> log), is built to accommodate federated environments, and also allows for graceful updating of ciphersuites and versions over time. In addition, it's very flexible and agnostic about the message content that is sent.
+此方案将 MLS（消息层安全）协议适配为与 Nostr 一起使用。你可以将 MLS 视为 Signal 协议的演进。然而，它显著提高了大型群组消息传递加密操作的可扩展性（线性 -> 对数），专为适应联邦环境而构建，并且允许随时间优雅地更新密码套件和版本。此外，它非常灵活，对发送的消息内容不做限制。
 
-It's beyond the scope of this NIP to explain the MLS protocol but you can read more about it in it's [Architectural Overview](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-13.html) or the [RFC](https://www.rfc-editor.org/rfc/rfc9420). MLS is on track to become an internet standard under the IETF so the protocol itself is extremely well vetted and researched. This also means there is the potential for cross network messaging interoperability in the future as MLS gains more adoption.
+解释 MLS 协议超出了本 NIP 的范围，但你可以在其[架构概述](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-13.html)或 [RFC](https://www.rfc-editor.org/rfc/rfc9420) 中阅读更多信息。MLS 即将在 IETF 下成为互联网标准，因此该协议本身经过了极其充分的审查和研究。这也意味着随着 MLS 获得更多采用，未来存在跨网络消息互操作性的潜力。
 
-## Core MLS Concepts
+## MLS 核心概念
 
-From the [MLS Architectural Overview](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-13.html):
+来自 [MLS 架构概述](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-13.html)：
 
-> MLS provides a way for clients to form groups within which they can communicate securely. For example, a set of users might use clients on their phones or laptops to join a group and communicate with each other. A group may be as small as two clients (e.g., for simple person to person messaging) or as large as hundreds of thousands. A client that is part of a group is a member of that group. As groups change membership and group or member properties, they advance from one epoch to another and the cryptographic state of the group evolves.
+> MLS 提供了一种方式，使客户端能够形成群组，在其中进行安全通信。例如，一组用户可能使用手机或笔记本电脑上的客户端加入群组并相互通信。一个群组可以小到只有两个客户端（例如，用于简单的人与人之间的消息传递），也可以大到成千上万。作为群组一部分的客户端就是该群组的成员。随着群组成员的变更以及群组或成员属性的变化，群组从一个时期推进到另一个时期，群组的密码学状态也随之演变。
 >
-> The group is represented as a tree, which represents the members as the leaves of a tree. It is used to efficiently encrypt to subsets of the members. Each member has a state called a LeafNode object holding the client's identity, credentials, and capabilities.
+> 群组被表示为一棵树，其成员作为树的叶子节点。它用于高效地加密到成员子集。每个成员都有一个称为 LeafNode 对象的状态，保存客户端的身份、凭证和能力。
 
-The MLS protocol's job is to manage and evolve the cryptographic state of a group. This includes managing the membership of a group, the cryptographic state of a group (ratchet tree, keys, and encryption/decryption/authentication of messages), and managing the evolution of the group over time.
+MLS 协议的职责是管理和演变群组的密码学状态。这包括管理群组的成员资格、群组的密码学状态（棘轮树、密钥以及消息的加密/解密/认证），以及管理群组随时间的演变。
 
-### Groups
+### 群组
 
-Groups are created by their first member, who then invites one or more other members. Groups evolve over time in blocks called `Epochs`. New epochs are proposed via one ore more `Proposal` messages and then committed to via a `Commit` message.
+群组由其第一个成员创建，然后邀请一个或多个其他成员。群组随时间以称为"时期（Epoch）"的块为单位演变。新的时期通过一个或多个"提案（Proposal）"消息提出，然后通过"提交（Commit）"消息提交。
 
-### Clients
+### 客户端
 
-The device/client pair (e.g. Primal on iOS or Coracle on web) with which a user joins the group is represented as a `LeafNode` in the tree. The terms `Client` and `Member` are interchangeable in this regard. It is not possible to share group state across multiple `Clients`. If a user joins a group from 2 separate devices, their state is separate and they will be tracked as 2 separate members of the group.
+用户加入群组所使用的设备/客户端对（例如 iOS 上的 Primal 或 Web 上的 Coracle）在树中被表示为 `LeafNode`。在这方面，术语"客户端"和"成员"是可以互换的。无法在多个"客户端"之间共享群组状态。如果用户从两个独立的设备加入同一个群组，他们的状态是分开的，并且将被跟踪为该群组的两个独立成员。
 
-### Messages
+### 消息
 
-There are several different types of messages sent within a group. Some of these are control messages that are used to update the group state over time. These include `Welcome`, `Proposal`, and `Commit` messages. Others are the actual messages that are sent between members in a group. These include `Application` messages.
+在群组内发送的消息有几种不同类型。其中一些是用于随时间更新群组状态的控制消息。这些包括"欢迎（Welcome）"、"提案（Proposal）"和"提交（Commit）"消息。其他是群组成员之间发送的实际消息。这些包括"应用（Application）"消息。
 
-Messages in MLS are "framed". Meaning that they are wrapped in a data structure that includes information about the sender, the epoch, the message index within the epoch and the message content. This framing makes it possible to authenticate and decrypt messages correctly, even if they arrive out of order.
+MLS 中的消息是"带帧的（framed）"。也就是说，它们被包装在一个数据结构中，其中包含关于发送者、时期、时期内的消息索引以及消息内容的信息。这种帧结构使得即使消息乱序到达，也能正确认证和解密消息。
 
-MLS is agnostic to the "content" of the messages that are sent. This is a key feature of MLS that allows for the use of MLS for a wide variety of applications.
+MLS 对所发送消息的"内容"不做限制。这是 MLS 的一个关键特性，允许 MLS 用于广泛的应用。
 
-MLS is also agnostic to the transport protocol that is used to send messages. Obviously for us, we'll be using websockets, Nostr events and relays.
+MLS 对用于发送消息的传输协议也不做限制。显然，对我们来说，我们将使用 WebSocket、Nostr 事件和中继。
 
-## The focus of this NIP
+## 本 NIP 的重点
 
-This NIP focuses on how to use Nostr to perform the Authentication Service and Delivery Service functions required by the MLS protocol. Most clients will choose to use an MLS implementation to handle keys, ratcheting, group state management, and other aspects of the MLS protocol itself. [OpenMLS](https://github.com/openmls/openmls) is the most actively developed library that implements MLS.
+本 NIP 侧重于如何使用 Nostr 来执行 MLS 协议所需的认证服务和投递服务功能。大多数客户端将选择使用 MLS 实现来处理密钥、棘轮、群组状态管理和 MLS 协议的其他方面。[OpenMLS](https://github.com/openmls/openmls) 是目前最活跃开发的实现 MLS 的库。
 
-This NIP specifies the following:
+本 NIP 规定了以下内容：
 
-1. A standardized way that Nostr clients should [create MLS groups](#creating-groups).
-2. The required format of the MLS [`Credential`](#mls-credentials) that Nostr clients should use to represent a Nostr user in a group.
-3. The structure of [KeyPackage Events](#keypackage-event-and-signing-keys) published to relays that allow Nostr users to be added to a group asynchronously.
-4. The structure of [Group Events](#group-events) published to relays that represent the evolution of a group's state and the contents of the messages sent in the group.
+1. Nostr 客户端应如何[创建 MLS 群组](#creating-groups)的标准化方式。
+2. Nostr 客户端在群组中表示 Nostr 用户时应使用的 MLS [`凭证（Credential）`](#mls-credentials)的必需格式。
+3. 发布到中继的[密钥包事件](#keypackage-event-and-signing-keys)的结构，允许 Nostr 用户被异步添加到群组。
+4. 发布到中继的[群组事件](#group-events)的结构，表示群组状态的演变以及群组中发送的消息内容。
 
-## Security Considerations
+## 安全考量
 
-This is a concise overview of the security trade-offs and considerations of this NIP in various scenarios. The NIP strives to fully maintain MLS security guarantees.
+这是本 NIP 在各种场景下的安全权衡和考量的简明概述。本 NIP 力求完全维护 MLS 的安全保障。
 
-### Forward Secrecy and Post-compromise Security
+### 前向保密和泄露后安全
 
-- As per the MLS spec, keys are deleted as soon as they are used to encrypt or decrypt a message. This is usually handled by the MLS implementation library itself but attention needs to be paid by clients to ensure they're not storing secrets (especially the [exporter secret](#group-events)) for longer than absolutely necessary.
-- This NIP maintains MLS forward secrecy and post-compromise security guarantees. You can read more about those in the MLS Architectural Overview section on [Forward Secrecy and Post-compromise Security](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-15.html#name-forward-and-post-compromise).
+- 根据 MLS 规范，密钥在用于加密或解密消息后立即被删除。这通常由 MLS 实现库本身处理，但客户端需要注意确保不会在绝对必要的时间之外存储机密（特别是[导出密钥（exporter secret）](#group-events)）。
+- 本 NIP 维护了 MLS 的前向保密和泄露后安全保障。你可以在 MLS 架构概述的[前向保密和泄露后安全](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-15.html#name-forward-and-post-compromise)部分阅读更多信息。
 
-### Leakage of various keys
+### 各种密钥的泄漏
 
-- This NIP does not depend on a user's Nostr identity key for any aspect of the MLS messaging protocol. Compromise of a user's Nostr identity key does not give access to past or future messages in any MLS-based group.
-- For a complete discussion of MLS key leakage, please see the Endpoint Compromise section of the [MLS Architectural Overview](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-15.html#name-endpoint-compromise).
+- 本 NIP 不依赖用户的 Nostr 身份密钥来执行 MLS 消息传递协议的任何方面。用户的 Nostr 身份密钥被泄露不会导致对任何基于 MLS 的群组中的过去或未来消息的访问。
+- 关于 MLS 密钥泄漏的完整讨论，请参阅 [MLS 架构概述](https://www.ietf.org/archive/id/draft-ietf-mls-architecture-15.html#name-endpoint-compromise)的端点泄露部分。
 
-### Metadata
+### 元数据
 
-- The only group specific metadata published to relays is the Nostr group ID value. This value is used to identify the group in the `h` tag of the Group Message Event (`kind: 445`). These events are published ephemerally and this Nostr group ID value can be updated over the lifetime of the group by group admins. This is a tradeoff to ensure that group participants and group size are obfuscated but still makes it possible to efficiently fan out group messages to all participants. The content field of this event is a value encrypted in two separate ways (using NIP-44 and MLS) with MLS group state/keys. Only group members with up-to-date group state can decrypt and read these messages.
-- A user's key package events can be used one or more times to be added to groups. There is a tradeoff inherent here: Reusing key packages (initial signing keys) carries some degree of risk but this risk is mitigated as long as a user rotates their signing key immediately upon joining a group. This step also improves the forward secrecy of the entire group.
+- 发布到中继的唯一群组特定元数据是 Nostr 群组 ID 值。此值用于在群组消息事件（`kind: 445`）的 `h` 标签中标识群组。这些事件以临时方式发布，并且此 Nostr 群组 ID 值可以在群组的生命周期内由群组管理员更新。这是一个权衡，以确保群组参与者和群组规模被混淆，但仍然可以高效地将群组消息扇出到所有参与者。此事件的 content 字段是以两种不同方式（使用 NIP-44 和 MLS）加密的值，使用 MLS 群组状态/密钥。只有具有最新群组状态的群组成员才能解密和阅读这些消息。
+- 用户的密钥包事件可以被使用一次或多次以添加到群组。这里存在固有的权衡：重用密钥包（初始签名密钥）有一定程度的风险，但只要用户在加入群组后立即轮换其签名密钥，这种风险就会得到缓解。此步骤也改善了整个群组的前向保密性。
 
-### Device Compromise
+### 设备泄露
 
-Clients implementing this NIP should take every precaution to ensure that data is stored in a secure way on the device and is protected against unwanted access in the case that a device is compromised (e.g. encryption at rest, biometric authentication, etc.). That said, full device compromise should be viewed as a catastrophic event and any group the compromised device was a part of should be considered compromised until they can remove that member and update their group's state. Some suggestions:
+实现本 NIP 的客户端应采取一切预防措施，确保数据以安全方式存储在设备上，并在设备被泄露时防止未授权访问（例如，静态加密、生物特征认证等）。也就是说，完全的设备泄露应被视为灾难性事件，被泄露设备曾参与的任何群组都应被视为已泄露，直到能够移除该成员并更新群组状态。一些建议：
 
-- Clients should support and encourage self-destructing messages (ensuring that full transcript history isn't available on a device forever).
-- Clients should regularly suggest to group admins that inactive users be removed.
-- Clients should regularly suggest (or automatically) rotate a user's signing key in each of their groups.
-- Clients should encrypt group state and keys on the device using a secret value that isn't part of the group state or the user's Nostr identity key.
-- Clients should use secure enclave storage where possible.
+- 客户端应支持并鼓励消息自动销毁（确保完整的对话历史不会永久存储在设备上）。
+- 客户端应定期建议群组管理员移除不活跃的用户。
+- 客户端应定期建议（或自动）在每个群组中轮换用户的签名密钥。
+- 客户端应使用不属于群组状态或用户 Nostr 身份密钥的机密值对设备上的群组状态和密钥进行加密。
+- 客户端应尽可能使用安全隔区存储。
 
-For a full discussion of the security considerations of MLS, please see the Security Considerations section of the [MLS RFC](https://www.rfc-editor.org/rfc/rfc9420.html#name-security-considerations).
+关于 MLS 安全考量的完整讨论，请参阅 [MLS RFC](https://www.rfc-editor.org/rfc/rfc9420.html#name-security-considerations) 的安全考量部分。
 
-## Creating groups
+## 创建群组
 
-MLS Groups are created with a random 32-byte ID value that is effectively permanent. This ID should be treated as private to the group and MUST not be published to relays in any form.
+MLS 群组使用一个随机的 32 字节 ID 值创建，该值实际上是永久性的。此 ID 应被视为群组的私密信息，`MUST NOT` 以任何形式发布到中继。
 
-Clients must also ensure that the ciphersuite, capabilities, and extensions they use when creating the group are compatible with those advertised by the users they'd like to invite to the group. They can check this info via the user's published KeyPackage Events.
+客户端还必须确保创建群组时使用的密码套件、能力和扩展与要邀请的用户所声明的兼容。他们可以通过用户发布的密钥包事件来检查此信息。
 
-When creating a new group, the following MLS extensions MUST be used.
+创建新群组时，`MUST` 使用以下 MLS 扩展：
 
 - [`required_capabilities`](https://docs.rs/openmls/latest/openmls/extensions/struct.RequiredCapabilitiesExtension.html)
 - [`ratchet_tree`](https://docs.rs/openmls/latest/openmls/extensions/struct.RatchetTreeExtension.html)
 - [`nostr_group_data`](https://github.com/rust-nostr/nostr/blob/master/mls/nostr-mls/src/extension.rs)
 
-And the following MLS extension is highly recommended (more [here](#keypackage-event-and-signing-keys)):
+并且强烈建议使用以下 MLS 扩展（更多信息见[此处](#keypackage-event-and-signing-keys)）：
 - [`last_resort`](https://docs.rs/openmls/latest/openmls/extensions/struct.LastResortExtension.html)
 
-Changes to an MLS group are affected by first creating one or more `Proposal` events and then committing to a set of proposals in a `Commit` event. These are MLS events, not Nostr events. However, for the group state to properly evolve the Commit events (which represent a specific set of proposals - like adding a new user to the group) must be published to relays for the other group members to see. See [Group Messages](#group-events) for more information.
+对 MLS 群组的更改通过首先创建一个或多个"提案（Proposal）"事件然后在"提交（Commit）"事件中提交一组提案来实现。这些是 MLS 事件，不是 Nostr 事件。然而，为了群组状态正确演变，提交事件（表示一组特定的提案——例如向群组添加新用户）必须发布到中继，以便其他群组成员查看。参见[群组消息](#group-events)了解更多信息。
 
-## MLS Credentials
+## MLS 凭证
 
-A `Credential` in MLS is an assertion of who the user is coupled with a signing key. When constructing `Credentials` for MLS, clients MUST use the `BasicCredential` type and set the `identity` value as the 32-byte hex-encoded public key of the user's Nostr identity key. Clients MUST not allow users to change the identity field and MUST validate that all `Proposal` messages do not attempt to change the identity field on any credential in the group.
+MLS 中的"凭证（Credential）"是对用户身份的断言，与签名密钥配对。在为 MLS 构建凭证时，客户端 `MUST` 使用 `BasicCredential` 类型，并将 `identity` 值设置为用户 Nostr 身份密钥的 32 字节十六进制编码公钥。客户端 `MUST NOT` 允许用户更改身份字段，并且 `MUST` 验证所有提案消息不会尝试更改群组中任何凭证的身份字段。
 
-A `Credential` also has an associated signing key. The initial signing key for a user is included in the KeyPackage event. The signing key MUST be different from the user's Nostr identity key. This signing key SHOULD be rotated over time to provide improved post-compromise security.
+凭证还有一个关联的签名密钥。用户的初始签名密钥包含在密钥包事件中。签名密钥 `MUST` 不同于用户的 Nostr 身份密钥。此签名密钥 `SHOULD` 随时间轮换以提供改进的泄露后安全性。
 
-## Nostr Group Data Extension
+## Nostr 群组数据扩展
 
-As mentioned above, the `nostr_group_data` extension is a required MLS extension used to associate Nostr-specific data with an MLS group in a cryptographically secure and proveable way. This extension MUST be included as a required capability when creating a new group.
+如上所述，`nostr_group_data` 扩展是一个必需的 MLS 扩展，用于以密码学安全和可证明的方式将 Nostr 特定数据与 MLS 群组关联起来。此扩展 `MUST` 在创建新群组时作为必需能力包含在内。
 
-The extension stores the following data about the group:
+该扩展存储以下群组相关数据：
 
-- `nostr_group_id`: A 32-byte ID for the group. This is a different value from the group ID used by MLS and CAN be changed over time. This value is the group ID value used in the `h` tags when sending group message events.
-- `name`: The name of the group.
-- `description`: A short description of the group.
-- `admin_pubkeys`: An array of the hex-encoded public keys of the group admins. The MLS protocol itself does not have a concept of group admins. Clients MUST check the list of `admin_pubkeys` before making any change to the group data (anything in this extension), or before changing group membership (add/remove members), or updating any other aspect of the group itself (e.g. ciphersuite, etc.). Note, all members of the group can send `Proposal` and `Commits` messages for changes to their own credentials (e.g. updating their signing key).
-- `relays`: An array of the Nostr relay URLs that the group uses to publish and receive messages.
+- `nostr_group_id`：群组的 32 字节 ID。这是一个与 MLS 使用的群组 ID 不同的值，并且 `CAN` 随时间更改。此值是在发送群组消息事件时在 `h` 标签中使用的群组 ID 值。
+- `name`：群组的名称。
+- `description`：群组的简短描述。
+- `admin_pubkeys`：群组管理员的十六进制编码公钥数组。MLS 协议本身没有群组管理员的概念。客户端 `MUST` 在对群组数据（此扩展中的任何内容）进行任何更改、更改群组成员资格（添加/移除成员）或更新群组本身的任何其他方面（例如密码套件等）之前检查 `admin_pubkeys` 列表。注意，群组的所有成员都可以发送提案和提交消息来更改自己的凭证（例如更新其签名密钥）。
+- `relays`：群组用于发布和接收消息的 Nostr 中继 URL 数组。
 
-All of these values can be updated over time using MLS `Proposal` and `Commit` events (by group admins).
+所有这些值都可以通过 MLS 提案和提交事件（由群组管理员）随时间更新。
 
-## KeyPackage Event and Signing Keys
+## 密钥包事件和签名密钥
 
-Each user that wishes to be reachable via MLS-based messaging MUST first publish at least one KeyPackage event. The KeyPackage Event is used to authenticate users and create the necessary `Credential` to add members to groups in an asynchronous way. Users can publish multiple KeyPackage Events with different parameters (supporting different ciphersuites or MLS extensions, for example). KeyPackages include a signing key that is used for signing MLS messages within a group. This signing key MUST not be the same as the user's Nostr identity key.
+每个希望通过基于 MLS 的消息传递被联系到的用户 `MUST` 首先发布至少一个密钥包事件。密钥包事件用于认证用户并创建必要的凭证，以异步方式将成员添加到群组。用户可以发布多个具有不同参数的密钥包事件（例如，支持不同的密码套件或 MLS 扩展）。密钥包包含一个用于在群组内签署 MLS 消息的签名密钥。此签名密钥 `MUST NOT` 与用户的 Nostr 身份密钥相同。
 
-KeyPackage reuse SHOULD be minimized. However, in normal MLS use, KeyPackages are consumed when joining a group. In order to reduce race conditions between invites for multiple groups using the same Key Package, Nostr clients SHOULD use "Last resort" KeyPackages. This requires the inclusion of the `last_resort` extension on the KeyPackage's capabilities (same as with the Group).
+密钥包重用 `SHOULD` 最小化。然而，在正常的 MLS 使用中，密钥包在加入群组时被消耗。为了减少使用相同密钥包邀请多个群组时的竞态条件，Nostr 客户端 `SHOULD` 使用"最后手段（Last resort）"密钥包。这需要在密钥包的能力中包含 `last_resort` 扩展（与群组相同）。
 
-It's important that clients immediately rotate a user's signing key after joining a group via a last resort key package to improve post-compromise security. The signing key (the public key included in the KeyPackage Event) is used for signing within the group. Therefore, clients implementing this NIP MUST ensure that they retain access to the private key material of the signing key for each group they are a member of.
+客户端在通过最后手段密钥包加入群组后，立即轮换用户的签名密钥以改善泄露后安全性，这一点很重要。签名密钥（包含在密钥包事件中的公钥）用于在群组内签署消息。因此，实现本 NIP 的客户端 `MUST` 确保为他们所加入的每个群组保留签名密钥的私钥材料。
 
-In most cases, it's assumed that clients implementing this NIP will manage the creation and rotation of KeyPackage Events.
+在大多数情况下，假设实现本 NIP 的客户端将管理密钥包事件的创建和轮换。
 
-### Example KeyPackage Event
+### 密钥包事件示例
 
 ```json
   {
@@ -179,27 +179,27 @@ In most cases, it's assumed that clients implementing this NIP will manage the c
 }
 ```
 
-- The `content` hex encoded serialized `KeyPackageBundle` from MLS.
-- The `mls_protocol_version` tag is required and MUST be the version number of the MLS protocol version being used. For now, this is `1.0`.
-- The `ciphersuite` tag is the value of the MLS ciphersuite that this KeyPackage Event supports. [Read more about ciphersuites in MLS](https://www.rfc-editor.org/rfc/rfc9420.html#name-mls-cipher-suites).
-- The `extensions` tag is an array of MLS extension IDs that this KeyPackage Event supports. [Read more about MLS extensions](https://www.rfc-editor.org/rfc/rfc9420.html#name-extensions).
-- (optional) The `client` tag helps other clients manage the user experience when they receive group invites but don't have access to the signing key.
-- The `relays` tag identifies each of the relays that the client will attempt to publish this KeyPackage event. This allows for deletion of KeyPackage Events at a later date.
-- (optional) The `-` tag can be used to ensure that KeyPackage Events are only published by their authenticated author. Read more in [NIP-70](70.md)
+- `content` 是来自 MLS 的十六进制编码序列化 `KeyPackageBundle`。
+- `mls_protocol_version` 标签是必需的，`MUST` 是所使用的 MLS 协议版本的版本号。目前为 `1.0`。
+- `ciphersuite` 标签是此密钥包事件支持的 MLS 密码套件值。[阅读更多关于 MLS 密码套件的信息](https://www.rfc-editor.org/rfc/rfc9420.html#name-mls-cipher-suites)。
+- `extensions` 标签是此密钥包事件支持的 MLS 扩展 ID 数组。[阅读更多关于 MLS 扩展的信息](https://www.rfc-editor.org/rfc/rfc9420.html#name-extensions)。
+- （可选）`client` 标签帮助其他客户端在收到群组邀请但没有访问签名密钥的权限时管理用户体验。
+- `relays` 标签标识客户端将尝试发布此密钥包事件的每个中继。这允许在以后删除密钥包事件。
+- （可选）`-` 标签可用于确保密钥包事件仅由其认证的作者发布。在 [NIP-70](70.md) 中阅读更多信息。
 
-### Deleting KeyPackage Events
+### 删除密钥包事件
 
-Clients SHOULD delete the KeyPackage Event on all the listed relays any time they successfully process a group request event for a given KeyPackage Event. Clients MAY also create a new KeyPackage Event at the same time.
+每当客户端成功处理给定密钥包事件的群组请求事件时，`SHOULD` 在所有列出的中继上删除该密钥包事件。客户端 `MAY` 同时创建一个新的密钥包事件。
 
-If clients cannot process a Welcome message (e.g. because the signing key was generated on another client), clients MUST not delete the KeyPackage Event and SHOULD show a human-understandable error to the user.
+如果客户端无法处理欢迎消息（例如，因为签名密钥是在另一个客户端上生成的），客户端 `MUST NOT` 删除密钥包事件，并且 `SHOULD` 向用户显示人类可理解的错误。
 
-### Rotating Signing Keys
+### 轮换签名密钥
 
-Clients MUST regularly rotate the user's signing key in each group that they are a part of. The more often the signing key is rotated the stronger the post-compromise security. This rotation is done via `Proposal` and `Commit` events and broadcast to the group via a Group Event. [Read more about forward secrecy and post-compromise security inherent in MLS](https://www.rfc-editor.org/rfc/rfc9420.html#name-forward-secrecy-and-post-co).
+客户端 `MUST` 定期在其参与的每个群组中轮换用户的签名密钥。签名密钥轮换得越频繁，泄露后安全性就越强。此轮换通过提案和提交事件完成，并通过群组事件广播到群组。[阅读更多关于 MLS 中固有的前向保密和泄露后安全](https://www.rfc-editor.org/rfc/rfc9420.html#name-forward-secrecy-and-post-co)。
 
-### KeyPackage Relays List Event
+### 密钥包中继列表事件
 
-A `kind: 10051` event indicates the relays that a user will publish their KeyPackage Events to. The event MUST include a list of relay tags with relay URIs. These relays SHOULD be readable by anyone the user wants to be able to contact them.
+`kind: 10051` 事件指示用户将其密钥包事件发布到哪些中继。该事件 `MUST` 包含一个中继标签列表，包含中继 URI。这些中继 `SHOULD` 对任何用户希望联系他们的人可读。
 
 ```json
 {
@@ -213,11 +213,11 @@ A `kind: 10051` event indicates the relays that a user will publish their KeyPac
 }
 ```
 
-### Welcome Event
+### 欢迎事件
 
-When a new user is added to a group via an MLS `Commit` message. The member who sends the `Commit` message to the group is responsible for sending the user being added to the group a Welcome Event. This Welcome Event is sent to the user as a [NIP-59](59.md) gift-wrapped event. The Welcome Event gives the new member the context they need to join the group and start sending messages.
+当新用户通过 MLS `Commit` 消息被添加到群组时，向群组发送提交消息的成员负责向被添加的用户发送欢迎事件。此欢迎事件作为 [NIP-59](59.md) 礼物包装事件发送给用户。欢迎事件为新成员提供了加入群组并开始发送消息所需的上下文。
 
-Clients creating the Welcome Event SHOULD wait until they have received acknowledgement from relays that their Group Event with the `Commit` has been received before publishing the Welcome Event.
+创建欢迎事件的客户端 `SHOULD` 等待收到中继确认包含提交的群组事件已被接收，然后再发布欢迎事件。
 
 ```json
 {
@@ -234,21 +234,21 @@ Clients creating the Welcome Event SHOULD wait until they have received acknowle
 }
 ```
 
-- The `content` field is required and is a serialized MLSMessage object containing the MLS `Welcome` object.
-- The `e` tag is required and is the ID of the KeyPackage Event used to add the user to the group.
-- The `relays` tag is required and is a list of relays clients should query for Group Events.
+- `content` 字段是必需的，是一个包含 MLS `Welcome` 对象的序列化 MLSMessage 对象。
+- `e` 标签是必需的，是用于将用户添加到群组的密钥包事件的 ID。
+- `relays` 标签是必需的，是客户端应查询群组事件的中继列表。
 
-Welcome Events are then sealed and gift-wrapped as detailed in [NIP-59](59.md) before being published. Like all events that are sealed and gift-wrapped, `kind: 444` events MUST never be signed. This ensures that if they were ever leaked they would not be publishable to relays.
+欢迎事件随后按照 [NIP-59](59.md) 中的详细说明进行密封和礼物包装，然后发布。像所有被密封和礼物包装的事件一样，`kind: 444` 事件 `MUST` 从不签名。这确保如果它们被泄露，也无法发布到中继。
 
-#### Large Groups
+#### 大型群组
 
-For groups above ~150 participants, welcome messages will become larger than the maximum event size allowed by Nostr. There is currently work underway on the MLS protocol to support "light" client welcomes that don't require the full Ratchet Tree state to be sent to the new member. This section will be updated with recommendations for how to handle large groups.
+对于约 150 人以上的群组，欢迎消息将变得大于 Nostr 允许的最大事件大小。目前 MLS 协议正在进行工作，以支持不需要将完整棘轮树状态发送给新成员的"轻量"客户端欢迎。本部分将更新以提供如何处理大型群组的建议。
 
-## Group Events
+## 群组事件
 
-Group Events are all the messages that are sent within a group. This includes all "control" events that update the shared group state over time (`Proposal`, `Commit`) and messages sent between members of the group (`Application` messages).
+群组事件是在群组内发送的所有消息。这包括随时间更新共享群组状态的所有"控制"事件（提案、提交）和群组成员之间发送的消息（应用消息）。
 
-Group Events are published using an ephemeral Nostr keypair to obfuscate the number and identity of group participants. Clients MUST use a new Nostr keypair for each Group Event they publish.
+群组事件使用临时 Nostr 密钥对发布，以混淆群组参与者的数量和身份。客户端 `MUST` 为其发布的每个群组事件使用新的 Nostr 密钥对。
 
 ```json
 {
@@ -263,30 +263,30 @@ Group Events are published using an ephemeral Nostr keypair to obfuscate the num
    "sig": <signed with ephemeral sender key>
 }
 ```
-- The `content` field is a [tls-style](https://www.rfc-editor.org/rfc/rfc9420.html#name-the-message-mls-media-type) serialized [`MLSMessage`](https://www.rfc-editor.org/rfc/rfc9420.html#section-6-4) object which is then encrypted according to [NIP-44](44.md). However, instead of using the sender and receivers keys to derive a `conversation_key`, the NIP-44 encryption is done using a Nostr keypair generated from the MLS [`exporter_secret`](https://www.rfc-editor.org/rfc/rfc9420.html#section-8.5) to calculate the `conversation_key` value. Essentially, you use the hex-encoded `exporter_secret` value as the private key (used as the sender key), calculate the public key for that private key (used as the receiver key), and then proceed with the standard NIP-44 scheme to encrypt and decrypt messages.
-- The `exporter_secret` value should be generated with a 32-byte length and labeled `nostr`. This `exporter_secret` value is rotated on each new epoch in the group. Clients should generate a new 32-byte value each time they process a valid `Commit` message.
-- The `pubkey` is the hex-encoded public key of the ephemeral sender.
-- The `h` tag is the nostr group ID value (from the Nostr Group Data Extension).
+- `content` 字段是一个 [tls 风格](https://www.rfc-editor.org/rfc/rfc9420.html#name-the-message-mls-media-type)序列化的 [`MLSMessage`](https://www.rfc-editor.org/rfc/rfc9420.html#section-6-4) 对象，然后根据 [NIP-44](44.md) 进行加密。然而，与使用发送者和接收者密钥推导 `conversation_key` 不同的是，NIP-44 加密是使用从 MLS [`exporter_secret`](https://www.rfc-editor.org/rfc/rfc9420.html#section-8.5) 生成的 Nostr 密钥对来计算 `conversation_key` 值。实质上，你使用十六进制编码的 `exporter_secret` 值作为私钥（用作发送者密钥），计算该私钥的公钥（用作接收者密钥），然后按照标准的 NIP-44 方案进行消息加密和解密。
+- `exporter_secret` 值应生成为 32 字节长度，并标记为 `nostr`。此 `exporter_secret` 值在群组的每个新时期轮换。客户端应在每次处理有效的提交消息时生成一个新的 32 字节值。
+- `pubkey` 是临时发送者的十六进制编码公钥。
+- `h` 标签是 Nostr 群组 ID 值（来自 Nostr 群组数据扩展）。
 
-### Application Messages
+### 应用消息
 
-Application messages are the messages that are sent within the group by members. These are contained within the `MLSMessage` object. The format of these messages should be unsigned Nostr events of the appropriate kind. For normal DM or group messages, clents SHOULD use `kind: 9` chat message events. If the user reacts to a message, it would be a `kind: 7` event, and so on.
+应用消息是群组成员在群组内发送的消息。它们包含在 `MLSMessage` 对象中。这些消息的格式应为适当种类的未签名 Nostr 事件。对于普通的 DM 或群组消息，客户端 `SHOULD` 使用 `kind: 9` 聊天消息事件。如果用户对消息做出反应，则为 `kind: 7` 事件，依此类推。
 
-This means that once the application message has been decrypted and deserialized, clients can store those events and treat them as any other Nostr event, effectively creating a private Nostr feed of the group's activity and taking advantage of all the features of Nostr.
+这意味着一旦应用消息被解密和反序列化，客户端可以存储这些事件并将其视为任何其他 Nostr 事件，从而有效创建群组活动的私有 Nostr 订阅源，并利用 Nostr 的所有功能。
 
-These inner unsigned Nostr events MUST use the member's Nostr identity key for the `pubkey` field and clients MUST check that the identity of them member who sent the message matches the pubkey of the inner Nostr event.
+这些内部未签名的 Nostr 事件 `MUST` 使用成员的 Nostr 身份密钥作为 `pubkey` 字段，并且客户端 `MUST` 检查发送消息的成员身份是否与内部 Nostr 事件的公钥匹配。
 
-These Nostr events MUST remain **unsigned** to ensure that if they were to leak to relays they would not be published publicly. These Nostr events MUST not include any "h" tags or other tags that would identify the group that they belong to.
+这些 Nostr 事件 `MUST` 保持**未签名**状态，以确保如果它们泄露到中继，也不会被公开发布。这些 Nostr 事件 `MUST NOT` 包含任何 "h" 标签或其他会标识其所属群组的标签。
 
-### `Commit` Message race conditions
+### `Commit` 消息竞态条件
 
-The MLS protocol is resilient to almost all messages arriving out of order. However, the order of `Commit` messages is important for the group state to move forward from one epoch to the next correctly. Given Nostr's nature as a decentralized network, it is possible for a client to receive 2 or more `Commit` messages all attempting to update to a new epoch at the same time.
+MLS 协议对几乎所有消息的乱序到达都具有弹性。然而，提交消息的顺序对于群组状态从一个时期正确推进到下一个时期非常重要。鉴于 Nostr 作为去中心化网络的性质，客户端有可能同时收到 2 个或更多提交消息，都试图更新到同一个新时期。
 
-Clients sending commit messages MUST wait until they receive acknowledgement from at least one relay that their Group Message Event with the `Commit` has been received before applying the commit to their own group state.
+发送提交消息的客户端 `MUST` 等待收到至少一个中继的确认，确认其包含提交的群组消息事件已被接收，然后再将提交应用到自己的群组状态。
 
-If a client receives 2 or more `Commit` messages attempting to change same epoch, they MUST apply only one of the `Commit` messages they receive, determined by the following:
+如果客户端收到 2 个或更多试图更改同一时期的提交消息，他们 `MUST` 仅应用收到的其中一个提交消息，通过以下方式确定：
 
-1. Using the `created_at` timestamp on the kind `445` event. The `Commit` with the lowest value for `created_at` is the message to be applied. The other `Commit` message is discarded.
-2. If the `created_at` timestamp is the same for two or more `Commit` messages, the `Commit` message with the lowest value for `id` field is the message to be applied.
+1. 使用 kind `445` 事件上的 `created_at` 时间戳。`created_at` 值最低的提交是要应用的消息。其他提交消息将被丢弃。
+2. 如果两个或更多提交消息的 `created_at` 时间戳相同，则 `id` 字段值最低的提交是要应用的消息。
 
-Clients SHOULD retain previous group state for a short period of time in order to recover from forked group state.
+客户端 `SHOULD` 在短时间内保留之前的群组状态，以便从分叉的群组状态中恢复。
