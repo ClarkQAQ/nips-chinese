@@ -113,6 +113,7 @@ NIPs 代表 **Nostr 实现可能性**（Nostr Implementation Possibilities）。
 - ~~[NIP-BE: Nostr BLE 通信协议](BE.md) --- **不推荐**: 仅实现过一次，是否可用尚不明确，需要审查~~
 - [NIP-C0: 代码片段](C0.md)
 - [NIP-C7: 聊天](C7.md)
+- [NIP-A3: payto: 支付目标](A3.md)
 - [NIP-CC: 地理寻宝](CC.md)
 - ~~[NIP-EE: 使用 MLS 协议的端到端加密消息](EE.md) --- **不推荐**: 已被 [Marmot 协议](https://github.com/marmot-protocol/marmot)取代~~
 - [NIP-F4: 播客](F4.md)
@@ -222,6 +223,7 @@ NIPs 代表 **Nostr 实现可能性**（Nostr Implementation Possibilities）。
 | `10063`       | 用户服务器列表           | [B7](B7.md)                            |
 | `10064`       | 创建的播客列表           | [51](51.md)                            |
 | `10096`       | 文件存储服务器列表       | [96](96.md)（已弃用）                   |
+| `10133`       | 支付目标                 | [A3](A3.md)                            |
 | `10154`       | 播客元数据               | [F4](F4.md)                            |
 | `10166`       | 中继监控公告             | [66](66.md)                            |
 | `10312`       | 房间在线状态             | [53](53.md)                            |
